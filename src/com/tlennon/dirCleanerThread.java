@@ -8,6 +8,7 @@ import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -28,34 +29,33 @@ public class dirCleanerThread implements Runnable {
     @Override
     public void run() {
         try {
-            Files.walk(Paths.get(dirName))
+            List<File> filesInFolder = Files.walk(Paths.get(dirName))
                     .filter(Files::isRegularFile)
-                    .collect(Collectors.toList())
-                    .forEach(path -> {
-                        try {
-                            checkFileAge(path);
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                            //Add logging failure here.
-                            System.out.println("Failed to access " + path);
-                        }
-                    });
+                    .map(Path::toFile)
+                    .collect(Collectors.toList());
+
+            Iterator<File> iterator = filesInFolder.iterator();
+            while(iterator.hasNext()){
+                Path path = iterator.next().toPath();
+                try {
+                    BasicFileAttributes attr = Files.readAttributes(path, BasicFileAttributes.class);
+                    Date datePlusDifference = new Date(attr.creationTime().toMillis() + (daysToRemoval * 24 * 60 * 1000));
+                    Date todaysDate = new Date();
+
+                    if(datePlusDifference.before(todaysDate)) {
+                        System.out.println("Deleting file " + path);
+                        Files.delete(path);
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    System.out.println("Failed to access + " + path);
+                }
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
-
-    private void checkFileAge(Path file) throws IOException {
-        BasicFileAttributes attr = Files.readAttributes(file, BasicFileAttributes.class);
-
-        //Subtracting sixtyDays
-        Date datePlusDifference = new Date(attr.creationTime().toMillis() + (daysToRemoval * 24 * 60 * 1000));
-        Date todaysDate = new Date();
-
-        if(datePlusDifference.before(todaysDate)) {
-            System.out.println("Deleting file " + file);
-        }
-    }
+    
     public void start () {
         System.out.println("Starting " +  dirName);
         if (t == null)
